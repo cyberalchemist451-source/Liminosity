@@ -114,47 +114,51 @@ export const SCRIPTED_THEMES: Theme[] = [
             ],
         },
     },
-    // Room 4 - scripted milestone. The ambient engine recognises this theme id
-    // and goes completely silent; the room is lined with a ring of suited
-    // watchers that always track the player's head. The infographic is
-    // terse by design; speak softly, or not at all.
-    {
-        id: 'silence',
-        name: 'The Silence',
-        subtitle: 'please observe the observers',
-        wallColor: '#16161a',
-        accentColor: '#e4e0d2',
-        floorMaterial: 'concrete',
-        lightColor: '#d4d0c4',
-        lightIntensity: 0.55,
-        ceiling: 6.4,
-        font: 'major-mono',
-        titleLetterSpacing: 0.45,
-        audioTone: {
-            // Effectively silent; the audio engine also hard-mutes on 'silence'.
-            baseHz: 24,
-            partials: [1],
-            lfoHz: 0.01,
-            noiseCenterHz: 120,
-            noiseGain: 0,
-            bellRatio: 2,
-            bellEverySec: 999,
-        },
-        infographic: {
-            title: 'RULES OF VISIT',
-            body: [
-                'do not speak.',
-                'do not whistle.',
-                'do not hum.',
-                '',
-                'the men will remain.',
-                'they will remember',
-                'whichever face you wear',
-                'when you leave.',
-            ],
-        },
-    },
 ];
+
+// ---------------------------------------------------------------------------
+// Room 16 milestone - The Silence. The ambient engine recognises this theme
+// id and hard-mutes the master bus; the room is lined with a ring of suited
+// watchers that always track the player's head. Moved out of the opening
+// scripted trio so it lands deeper in the run, after the player has already
+// been conditioned to expect soundtrack and then has it pulled out from
+// under them.
+const SILENCE_THEME: Theme = {
+    id: 'silence',
+    name: 'The Silence',
+    subtitle: 'please observe the observers',
+    wallColor: '#16161a',
+    accentColor: '#e4e0d2',
+    floorMaterial: 'concrete',
+    lightColor: '#d4d0c4',
+    lightIntensity: 0.55,
+    ceiling: 6.4,
+    font: 'major-mono',
+    titleLetterSpacing: 0.45,
+    audioTone: {
+        // Effectively silent; the audio engine also hard-mutes on 'silence'.
+        baseHz: 24,
+        partials: [1],
+        lfoHz: 0.01,
+        noiseCenterHz: 120,
+        noiseGain: 0,
+        bellRatio: 2,
+        bellEverySec: 999,
+    },
+    infographic: {
+        title: 'RULES OF VISIT',
+        body: [
+            'do not speak.',
+            'do not whistle.',
+            'do not hum.',
+            '',
+            'the men will remain.',
+            'they will remember',
+            'whichever face you wear',
+            'when you leave.',
+        ],
+    },
+};
 
 const PROCEDURAL_THEMES: Theme[] = [
     {
@@ -1799,6 +1803,7 @@ export const MILESTONE_THEMES: Record<number, Theme> = {
     7: MUSEUM_OF_RUST_THEME,
     8: FRACTAL_CHAPEL_THEME,
     14: MARINE_BIOLOGY_THEME,
+    15: SILENCE_THEME,
     16: FOREST_GROVE_THEME,
     21: VOID_SHAFT_THEME,
     26: BRIDGE_OF_FACES_THEME,
@@ -1842,6 +1847,7 @@ export function getTheme(
 export const THEME_IDS: ThemeId[] = [
     ...SCRIPTED_THEMES.map((t) => t.id),
     ...PROCEDURAL_THEMES.map((t) => t.id),
+    SILENCE_THEME.id,
     FRACTAL_CHAPEL_THEME.id,
     MARINE_BIOLOGY_THEME.id,
     FOREST_GROVE_THEME.id,
