@@ -12,15 +12,25 @@ const TUNNEL_HEIGHT = HALLWAY_HEIGHT;
 const WATER_COLOR = '#0a3b55';
 const WATER_BRIGHT = '#1a7da8';
 
+// Water volume hugging the glass tunnel. Kept deliberately small: a
+// shallow glass passage under a body of water, not a cathedral-sized
+// aquarium. The shell is a fraction wider than the hallway so a few
+// small fish can school past the glass, but does not reach into the
+// neighbouring rooms the way an oversized volume would.
+const SHELL_WIDTH = HALLWAY_WIDTH + 5.6; // ~1.4m of water visible either side
+const SHELL_HEIGHT = TUNNEL_HEIGHT + 1.6; // a metre of water over the ceiling
+const SHELL_Z_PAD = 1.2; // end-cap the water cleanly at the doorways
+const FISH_MARGIN = 0.4; // keep fish this far inside the shell
+
 type Props = {
     fromRoom: RoomSpec;
     toRoom?: RoomSpec;
 };
 
-// A glass-walled tunnel that pierces a body of blue-green water. The walkable
-// corridor is the same straight AABB as any other hallway; outside the glass
-// we render a broad water volume with schools of small fish and a few large,
-// slow ones arcing through.
+// A glass-walled tunnel that pierces a thin body of blue-green water. The
+// walkable corridor is the same straight AABB as any other hallway; outside
+// the glass we render a tight water volume with schools of small fish
+// shoaling past. No large fish, no sprawling tank.
 export default function AquariumHallway({ fromRoom, toRoom }: Props) {
     const startZ = fromRoom.origin[2] + fromRoom.depth / 2;
     const length = HALLWAY_LENGTH;
@@ -28,54 +38,37 @@ export default function AquariumHallway({ fromRoom, toRoom }: Props) {
     const midZ = startZ + length / 2;
     const wHalf = HALLWAY_WIDTH / 2;
 
-    // Deterministic schools and large fish
-    const { schoolA, schoolB, largeFish } = useMemo(() => {
+    // X range the fish are allowed to occupy, either side of the glass.
+    const xInnerAbs = wHalf + FISH_MARGIN + 0.1; // just outside the glass
+    const xOuterAbs = SHELL_WIDTH / 2 - FISH_MARGIN;
+    // Y range is bounded by the shell floor (~y=0) and its top.
+    const yMin = 0.5;
+    const yMax = SHELL_HEIGHT - FISH_MARGIN;
+
+    const { schoolA, schoolB } = useMemo(() => {
         const rnd = mulberry32(0x13579bdf ^ Math.floor(startZ * 17.3));
         const makeSchool = (count: number, yBase: number, side: 1 | -1) =>
             Array.from({ length: count }, () => ({
                 offsetZ: rnd() * length,
-                offsetY: yBase + (rnd() - 0.5) * 1.4,
+                offsetY: Math.min(
+                    yMax - 0.3,
+                    Math.max(yMin + 0.3, yBase + (rnd() - 0.5) * 1.2),
+                ),
                 side,
                 speed: 0.6 + rnd() * 0.7,
                 phase: rnd() * Math.PI * 2,
-                sway: 0.5 + rnd() * 0.6,
-                size: 0.1 + rnd() * 0.08,
+                sway: 0.25 + rnd() * 0.35,
+                size: 0.08 + rnd() * 0.06,
             }));
         return {
-            schoolA: makeSchool(22, 1.8, 1),
-            schoolB: makeSchool(18, 0.9, -1),
-            largeFish: [
-                {
-                    offsetZ: rnd() * length,
-                    offsetY: 1.6,
-                    side: 1 as const,
-                    speed: 0.22,
-                    phase: rnd() * Math.PI * 2,
-                    size: 0.9,
-                },
-                {
-                    offsetZ: rnd() * length,
-                    offsetY: 2.0,
-                    side: -1 as const,
-                    speed: 0.18,
-                    phase: rnd() * Math.PI * 2,
-                    size: 1.15,
-                },
-                {
-                    offsetZ: rnd() * length,
-                    offsetY: 2.6,
-                    side: 1 as const,
-                    speed: 0.14,
-                    phase: rnd() * Math.PI * 2,
-                    size: 1.45,
-                },
-            ],
+            schoolA: makeSchool(14, 1.8, 1),
+            schoolB: makeSchool(12, 1.1, -1),
         };
-    }, [startZ, length]);
+    }, [startZ, length, yMin, yMax]);
 
     return (
         <group>
-            {/* Surrounding water volume - three big panels around the tunnel. */}
+            {/* Tight water volume around the tunnel. */}
             <WaterShell centerZ={midZ} length={length} />
 
             {/* Floor stays opaque so the player has something to walk on */}
@@ -98,14 +91,15 @@ export default function AquariumHallway({ fromRoom, toRoom }: Props) {
                 size={[WALL_T, TUNNEL_HEIGHT, length]}
             />
 
-            {/* Glass ceiling (slight dome feel) */}
+            {/* Glass ceiling */}
             <GlassPanel
                 position={[0, TUNNEL_HEIGHT + WALL_T / 2, midZ]}
                 size={[HALLWAY_WIDTH + WALL_T * 2, WALL_T, length]}
             />
 
-            {/* Fish: two schools + three large individuals. Schools swim in
-                loose shoaling patterns; large fish drift slowly across. */}
+            {/* Fish: two small shoals either side of the tunnel. Positions
+                are clamped every frame to the shell bounds so nothing can
+                swim out into the neighbouring rooms. */}
             {schoolA.map((f, i) => (
                 <SmallFish
                     key={`sA${i}`}
@@ -118,6 +112,10 @@ export default function AquariumHallway({ fromRoom, toRoom }: Props) {
                     phase={f.phase}
                     sway={f.sway}
                     size={f.size}
+                    xInnerAbs={xInnerAbs}
+                    xOuterAbs={xOuterAbs}
+                    yMin={yMin}
+                    yMax={yMax}
                 />
             ))}
             {schoolB.map((f, i) => (
@@ -132,19 +130,10 @@ export default function AquariumHallway({ fromRoom, toRoom }: Props) {
                     phase={f.phase}
                     sway={f.sway}
                     size={f.size}
-                />
-            ))}
-            {largeFish.map((f, i) => (
-                <LargeFish
-                    key={`L${i}`}
-                    startZ={startZ}
-                    length={length}
-                    offsetZ={f.offsetZ}
-                    y={f.offsetY}
-                    side={f.side}
-                    speed={f.speed}
-                    phase={f.phase}
-                    size={f.size}
+                    xInnerAbs={xInnerAbs}
+                    xOuterAbs={xOuterAbs}
+                    yMin={yMin}
+                    yMax={yMax}
                 />
             ))}
 
@@ -206,8 +195,8 @@ function GlassPanel({
     );
 }
 
-// Shader shell rendered as the back side of a large box around the tunnel.
-// Paints deep-water blue with rippling caustic-like highlights.
+// Shader shell rendered as the back side of a tight box around the tunnel.
+// Painted deep-water blue with gentle caustic highlights.
 const WATER_VERT = /* glsl */ `
     varying vec3 vWorldPos;
     void main() {
@@ -234,15 +223,11 @@ const WATER_FRAG = /* glsl */ `
         return mix(mix(a,b,u.x), mix(c,d,u.x), u.y);
     }
     void main() {
-        float depth = clamp((6.0 - vWorldPos.y) / 14.0, 0.0, 1.0);
+        float depth = clamp((4.0 - vWorldPos.y) / 6.0, 0.0, 1.0);
         vec3 col = mix(uShallow, uDeep, depth);
-        // slow moving caustic bands
-        float caustic = noise(vec2(vWorldPos.x*0.25 + uTime*0.2, vWorldPos.z*0.25));
+        float caustic = noise(vec2(vWorldPos.x*0.35 + uTime*0.2, vWorldPos.z*0.35));
         caustic = smoothstep(0.55, 0.9, caustic);
         col += vec3(0.35, 0.55, 0.7) * caustic * 0.18;
-        // faint volumetric darkening at the tunnel-level horizon
-        float hfade = smoothstep(0.0, 2.5, abs(vWorldPos.y - 1.5));
-        col *= mix(1.0, 0.75, hfade * 0.4);
         gl_FragColor = vec4(col, 1.0);
     }
 `;
@@ -261,8 +246,10 @@ function WaterShell({ centerZ, length }: { centerZ: number; length: number }) {
         if (matRef.current) matRef.current.uniforms.uTime.value = clock.getElapsedTime();
     });
     return (
-        <mesh position={[0, 2, centerZ]}>
-            <boxGeometry args={[60, 22, length + 20]} />
+        <mesh position={[0, SHELL_HEIGHT / 2, centerZ]}>
+            <boxGeometry
+                args={[SHELL_WIDTH, SHELL_HEIGHT, length + SHELL_Z_PAD * 2]}
+            />
             <shaderMaterial
                 ref={matRef}
                 vertexShader={WATER_VERT}
@@ -275,8 +262,9 @@ function WaterShell({ centerZ, length }: { centerZ: number; length: number }) {
     );
 }
 
-// Small shoaling fish: travels a looping path along +Z with a sinuous lateral
-// sway, wrapping back to startZ when it exits.
+// Small shoaling fish: loops along +Z within the hallway's Z extent, with a
+// gentle lateral sway clamped to the shell's X range so none can swim into
+// the rooms at either end of the tunnel.
 function SmallFish({
     startZ,
     length,
@@ -287,6 +275,10 @@ function SmallFish({
     phase,
     sway,
     size,
+    xInnerAbs,
+    xOuterAbs,
+    yMin,
+    yMax,
 }: {
     startZ: number;
     length: number;
@@ -297,16 +289,26 @@ function SmallFish({
     phase: number;
     sway: number;
     size: number;
+    xInnerAbs: number;
+    xOuterAbs: number;
+    yMin: number;
+    yMax: number;
 }) {
     const ref = useRef<THREE.Group>(null);
-    const baseX = side * (HALLWAY_WIDTH / 2 + 1.6 + Math.abs(Math.sin(phase)) * 1.4);
+    // baseX sits midway between the glass and the shell wall on this side.
+    const baseX = side * ((xInnerAbs + xOuterAbs) / 2);
+    const xRange = (xOuterAbs - xInnerAbs) / 2 - 0.05;
     useFrame(({ clock }) => {
         if (!ref.current) return;
         const t = clock.getElapsedTime();
         const z = startZ + ((offsetZ + t * speed * 3.0) % length);
-        const xOff = Math.sin(t * 1.6 + phase) * sway;
-        const yOff = Math.sin(t * 0.9 + phase * 1.3) * 0.25;
-        ref.current.position.set(baseX + xOff, y + yOff, z);
+        const xOff = Math.sin(t * 1.6 + phase) * Math.min(sway, xRange);
+        const yOff = Math.sin(t * 0.9 + phase * 1.3) * 0.2;
+        ref.current.position.set(
+            baseX + xOff,
+            Math.min(yMax, Math.max(yMin, y + yOff)),
+            z,
+        );
         ref.current.rotation.y = side === 1 ? 0.15 : Math.PI - 0.15;
         ref.current.rotation.z = Math.sin(t * 3.0 + phase) * 0.15;
     });
@@ -320,58 +322,6 @@ function SmallFish({
             <mesh position={[-size * 0.9, 0, 0]}>
                 <coneGeometry args={[size * 0.55, size * 0.9, 6]} />
                 <meshStandardMaterial color={color} roughness={0.6} metalness={0.3} />
-            </mesh>
-        </group>
-    );
-}
-
-// A slow, arcing larger fish. Drifts from one end of the tunnel to the other,
-// passing close enough to be visible through the glass.
-function LargeFish({
-    startZ,
-    length,
-    offsetZ,
-    y,
-    side,
-    speed,
-    phase,
-    size,
-}: {
-    startZ: number;
-    length: number;
-    offsetZ: number;
-    y: number;
-    side: 1 | -1;
-    speed: number;
-    phase: number;
-    size: number;
-}) {
-    const ref = useRef<THREE.Group>(null);
-    useFrame(({ clock }) => {
-        if (!ref.current) return;
-        const t = clock.getElapsedTime();
-        const z = startZ + ((offsetZ + t * speed * 5.0) % (length + 20)) - 10;
-        const x = side * (HALLWAY_WIDTH / 2 + 3.2 + Math.sin(t * 0.3 + phase) * 1.6);
-        const yOff = Math.sin(t * 0.35 + phase) * 0.7;
-        ref.current.position.set(x, y + yOff, z);
-        ref.current.rotation.y = side === 1 ? 0.1 : Math.PI - 0.1;
-        ref.current.rotation.z = Math.sin(t * 0.8 + phase) * 0.18;
-    });
-    const color = '#3a6a88';
-    return (
-        <group ref={ref}>
-            <mesh>
-                <sphereGeometry args={[size, 12, 10]} />
-                <meshStandardMaterial color={color} roughness={0.7} metalness={0.15} />
-            </mesh>
-            <mesh position={[-size * 1.05, 0, 0]} rotation={[0, 0, 0]}>
-                <coneGeometry args={[size * 0.6, size * 1.1, 10]} />
-                <meshStandardMaterial color={color} roughness={0.75} metalness={0.1} />
-            </mesh>
-            {/* Dorsal fin */}
-            <mesh position={[0, size * 0.8, 0]} rotation={[0, 0, 0]}>
-                <coneGeometry args={[size * 0.3, size * 0.9, 3]} />
-                <meshStandardMaterial color={color} roughness={0.75} metalness={0.1} />
             </mesh>
         </group>
     );
