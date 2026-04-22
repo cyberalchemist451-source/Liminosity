@@ -44,10 +44,18 @@ export default function GalleryScene() {
     return (
         <>
             <color attach="background" args={['#06060a']} />
+            {/* Fog range is kept tight on purpose - it doubles as a
+                streaming mask and a perf lever, so we don't widen it when
+                the player just wants better near-field visibility. */}
             <fog attach="fog" args={['#06060a', 14, 42]} />
             <AtmosphereDrift />
-            <ambientLight intensity={0.22} color="#8891a0" />
-            <hemisphereLight args={['#1a1c25', '#05050a', 0.28]} />
+            {/* Ambient + hemisphere carry most of the baseline visibility,
+                so bumping them here brightens every room and hallway at
+                once without adding a single real point light to the shader
+                budget. Tint stays cool-neutral so themed light colors still
+                read as the dominant hue. */}
+            <ambientLight intensity={0.48} color="#9aa3b2" />
+            <hemisphereLight args={['#2a2d3a', '#07070c', 0.55]} />
             <RoomManager />
             <PlayerController />
             <StatsBridge />

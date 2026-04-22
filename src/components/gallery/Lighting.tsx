@@ -75,8 +75,10 @@ export function Fluorescent({
                     ref={lightRef}
                     color={color}
                     intensity={intensity}
-                    distance={18}
-                    decay={1.6}
+                    // Longer reach and shallower decay so a single point
+                    // light per room covers the whole floor plate clearly.
+                    distance={26}
+                    decay={1.3}
                 />
             )}
         </group>
@@ -130,7 +132,7 @@ export function RoomLights({ theme, origin, width, depth, ceilingHeight }: RoomL
                     // this room's persistent floor height.
                     position={[origin[0] + lx, ceilingHeight - 0.3, origin[2] + lz]}
                     color={theme.lightColor}
-                    intensity={theme.lightIntensity * 1.35}
+                    intensity={theme.lightIntensity * 1.85}
                     flicker
                     lit={i === centerIdx}
                 />
@@ -169,7 +171,7 @@ export function HallLights({
                     key={i}
                     position={[0, ceilingHeight - 0.25, lz]}
                     color={color}
-                    intensity={intensity * 1.3}
+                    intensity={intensity * 1.7}
                     flicker
                     length={1.2}
                     lit={i === midIdx}
