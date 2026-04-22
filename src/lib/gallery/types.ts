@@ -6,6 +6,7 @@ export type ThemeId =
     | 'ufo'
     | 'ai-history'
     | 'forbidden-knowledge'
+    | 'silence'
     | 'mycelium-cathedral'
     | 'mirror-loop'
     | 'infinite-library'

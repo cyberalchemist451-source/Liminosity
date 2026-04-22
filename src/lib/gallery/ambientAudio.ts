@@ -71,6 +71,7 @@ let engine: Engine | null = null;
 let currentTheme: Theme | null = null;
 let muted = false;
 let ducked = false;
+let silenced = false;
 let epicActive = false;
 let windActive = false;
 const MASTER_VOLUME = 0.55;
@@ -134,6 +135,9 @@ function generatePinkNoiseBuffer(ctx: AudioContext, durationSec = 4) {
 
 function computeTargetMasterGain() {
     if (muted) return 0;
+    // Silence-themed rooms hard-mute the bus so the whole museum goes
+    // completely still while the watchers do their work.
+    if (silenced) return 0;
     return ducked ? DUCKED_VOLUME : MASTER_VOLUME;
 }
 
@@ -406,6 +410,21 @@ function applyTheme(theme: Theme, rampSec = 2.5) {
 
 export function setAudioTheme(theme: Theme) {
     currentTheme = theme;
+    // The Silence hard-mutes the master bus; non-silence rooms restore it.
+    const nextSilenced = theme.id === 'silence';
+    if (nextSilenced !== silenced) {
+        silenced = nextSilenced;
+        if (engine) {
+            const now = engine.ctx.currentTime;
+            // Faster fade out entering Silence so the room "feels" when you
+            // cross the threshold; slower fade in on exit.
+            const ramp = nextSilenced ? 0.7 : 2.0;
+            engine.master.gain.linearRampToValueAtTime(
+                computeTargetMasterGain(),
+                now + ramp,
+            );
+        }
+    }
     applyTheme(theme);
     // The Fractal Chapel swaps the ambient bed for cinematic epic music and
     // reverts back to the theme drones on the way out.

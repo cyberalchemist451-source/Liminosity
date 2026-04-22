@@ -8,7 +8,13 @@ import { STAIRS_RUN, STAIRS_PLATEAU, STAIRS_RISE } from '@/lib/gallery/collision
 import { Fluorescent } from '../Lighting';
 
 const WALL_T = 0.2;
-const RAMP_CEILING = 4.2;
+// Clearance between the walking surface and the ceiling at every point along
+// the stairwell. The ceiling is held flat at PLATEAU + RAMP_CEILING metres,
+// so the narrowest headroom (directly over the plateau) is exactly this
+// value and the widest (at the feet of the ramps) is PLATEAU + this value.
+const RAMP_CEILING = 5.2;
+const CEILING_Y = STAIRS_RISE + RAMP_CEILING; // absolute y of the ceiling
+const CEILING_T = 0.22; // real thickness so we never read a seam
 
 function shade(hex: string, amt: number) {
     const c = new THREE.Color(hex);
@@ -24,9 +30,11 @@ type Props = {
 // A hallway that rises for STAIRS_RUN metres to a plateau at STAIRS_RISE,
 // holds that height for STAIRS_PLATEAU metres, then descends symmetrically.
 // Walking physics is handled centrally through collision.groundYAt; this
-// component is visuals only: a smooth ramp mesh acts as the "real" floor for
+// component is visuals only: a smooth ramp mesh acts as the floor for
 // sampling, while a stack of box geometries on top decorates it as proper
-// steps.
+// steps. The ceiling is kept perfectly flat at the plateau's roof height -
+// this guarantees generous headroom everywhere and sidesteps the seam
+// artifacts that a multi-plane tilted ceiling used to produce.
 export default function StairsHallway({ fromRoom, toRoom }: Props) {
     const startZ = fromRoom.origin[2] + fromRoom.depth / 2;
     const length = HALLWAY_LENGTH;
@@ -53,8 +61,6 @@ export default function StairsHallway({ fromRoom, toRoom }: Props) {
     const downMidZ = startZ + STAIRS_RUN + STAIRS_PLATEAU + STAIRS_RUN / 2;
     const endZ = startZ + length;
 
-    // Tilt angles for the two ramp planes (so they align with the traversal
-    // slope and the step risers sit flush).
     const rampAngle = Math.atan2(STAIRS_RISE, STAIRS_RUN);
 
     // Build discrete step rectangles for visual steps. 12 steps per ramp.
@@ -90,6 +96,9 @@ export default function StairsHallway({ fromRoom, toRoom }: Props) {
         }
         return out;
     }, [startZ]);
+
+    // A thin overlay on the step faces to hide aliasing where boxes meet.
+    const riserW = HALLWAY_WIDTH;
 
     return (
         <group>
@@ -135,14 +144,14 @@ export default function StairsHallway({ fromRoom, toRoom }: Props) {
                         rotation={[-Math.PI / 2, 0, 0]}
                         receiveShadow
                     >
-                        <planeGeometry args={[HALLWAY_WIDTH, s.depth]} />
+                        <planeGeometry args={[riserW, s.depth]} />
                         <meshStandardMaterial color={stepColor} roughness={0.9} />
                     </mesh>
                     <mesh
                         position={[0, s.y, s.z - s.depth / 2]}
                         receiveShadow
                     >
-                        <boxGeometry args={[HALLWAY_WIDTH, s.rise, 0.02]} />
+                        <boxGeometry args={[riserW, s.rise, 0.02]} />
                         <meshStandardMaterial color={stepEdge} roughness={0.85} />
                     </mesh>
                 </group>
@@ -156,80 +165,75 @@ export default function StairsHallway({ fromRoom, toRoom }: Props) {
                         rotation={[-Math.PI / 2, 0, 0]}
                         receiveShadow
                     >
-                        <planeGeometry args={[HALLWAY_WIDTH, s.depth]} />
+                        <planeGeometry args={[riserW, s.depth]} />
                         <meshStandardMaterial color={stepColor} roughness={0.9} />
                     </mesh>
                     <mesh
                         position={[0, s.y, s.z + s.depth / 2]}
                         receiveShadow
                     >
-                        <boxGeometry args={[HALLWAY_WIDTH, s.rise, 0.02]} />
+                        <boxGeometry args={[riserW, s.rise, 0.02]} />
                         <meshStandardMaterial color={stepEdge} roughness={0.85} />
                     </mesh>
                 </group>
             ))}
 
-            {/* Ceiling follows the stair profile roughly: up, plateau high, down */}
+            {/* Flat ceiling at the plateau's roof height, spanning the full
+                hallway length as a single thick slab. Overlaps the side walls
+                slightly so no sliver of void is ever visible at the joint. */}
             <mesh
-                position={[0, RAMP_CEILING + STAIRS_RISE / 2, upMidZ]}
-                rotation={[Math.PI / 2 + rampAngle, 0, 0]}
+                position={[0, CEILING_Y + CEILING_T / 2, startZ + length / 2]}
                 receiveShadow
             >
-                <planeGeometry
-                    args={[HALLWAY_WIDTH, Math.sqrt(STAIRS_RUN ** 2 + STAIRS_RISE ** 2) + 0.3]}
-                />
-                <meshStandardMaterial color={ceilingColor} roughness={0.9} />
-            </mesh>
-            <mesh
-                position={[0, RAMP_CEILING + STAIRS_RISE, plateauMidZ]}
-                rotation={[Math.PI / 2, 0, 0]}
-                receiveShadow
-            >
-                <planeGeometry args={[HALLWAY_WIDTH, STAIRS_PLATEAU]} />
-                <meshStandardMaterial color={ceilingColor} roughness={0.9} />
-            </mesh>
-            <mesh
-                position={[0, RAMP_CEILING + STAIRS_RISE / 2, downMidZ]}
-                rotation={[Math.PI / 2 - rampAngle, 0, 0]}
-                receiveShadow
-            >
-                <planeGeometry
-                    args={[HALLWAY_WIDTH, Math.sqrt(STAIRS_RUN ** 2 + STAIRS_RISE ** 2) + 0.3]}
+                <boxGeometry
+                    args={[HALLWAY_WIDTH + 0.5, CEILING_T, length + 0.2]}
                 />
                 <meshStandardMaterial color={ceilingColor} roughness={0.9} />
             </mesh>
 
-            {/* Side walls: tall enough to span ground-to-ceiling everywhere */}
+            {/* Side walls: run from the floor up past the ceiling slab, also
+                overlapping slightly so the seam with the ceiling reads as
+                solid stone rather than an open edge. */}
             <mesh
-                position={[-wHalf - WALL_T / 2, STAIRS_RISE / 2 + RAMP_CEILING / 2, startZ + length / 2]}
+                position={[
+                    -wHalf - WALL_T / 2,
+                    (CEILING_Y + CEILING_T) / 2,
+                    startZ + length / 2,
+                ]}
                 castShadow
                 receiveShadow
             >
-                <boxGeometry args={[WALL_T, STAIRS_RISE + RAMP_CEILING, length]} />
+                <boxGeometry args={[WALL_T, CEILING_Y + CEILING_T + 0.4, length]} />
                 <meshStandardMaterial color={wallColor} roughness={0.85} />
             </mesh>
             <mesh
-                position={[wHalf + WALL_T / 2, STAIRS_RISE / 2 + RAMP_CEILING / 2, startZ + length / 2]}
+                position={[
+                    wHalf + WALL_T / 2,
+                    (CEILING_Y + CEILING_T) / 2,
+                    startZ + length / 2,
+                ]}
                 castShadow
                 receiveShadow
             >
-                <boxGeometry args={[WALL_T, STAIRS_RISE + RAMP_CEILING, length]} />
+                <boxGeometry args={[WALL_T, CEILING_Y + CEILING_T + 0.4, length]} />
                 <meshStandardMaterial color={wallColor} roughness={0.85} />
             </mesh>
 
-            {/* Lighting: a fixture at plateau entrance and exit plus one in the middle */}
+            {/* Lighting: fixtures at ramp entry, middle of the plateau, and
+                ramp exit so the climb is never dim. Pegged to the flat
+                ceiling. */}
             <Fluorescent
-                position={[0, RAMP_CEILING + STAIRS_RISE - 0.3, startZ + STAIRS_RUN]}
+                position={[0, CEILING_Y - 0.25, startZ + STAIRS_RUN]}
                 color={fromRoom.theme.lightColor}
                 intensity={0.6}
             />
             <Fluorescent
-                position={[0, RAMP_CEILING + STAIRS_RISE - 0.3, plateauMidZ]}
+                position={[0, CEILING_Y - 0.25, plateauMidZ]}
                 color={fromRoom.theme.lightColor}
                 intensity={0.55}
             />
             <Fluorescent
-                position={[0, RAMP_CEILING + STAIRS_RISE - 0.3, startZ + STAIRS_RUN + STAIRS_PLATEAU]}
+                position={[0, CEILING_Y - 0.25, startZ + STAIRS_RUN + STAIRS_PLATEAU]}
                 color={fromRoom.theme.lightColor}
                 intensity={0.6}
             />
@@ -237,11 +241,13 @@ export default function StairsHallway({ fromRoom, toRoom }: Props) {
             {/* Dead-end cap when the next room hasn't streamed in yet */}
             {!toRoom && (
                 <mesh
-                    position={[0, RAMP_CEILING / 2, endZ + WALL_T / 2]}
+                    position={[0, (CEILING_Y + CEILING_T) / 2, endZ + WALL_T / 2]}
                     castShadow
                     receiveShadow
                 >
-                    <boxGeometry args={[HALLWAY_WIDTH, RAMP_CEILING, WALL_T]} />
+                    <boxGeometry
+                        args={[HALLWAY_WIDTH + 0.5, CEILING_Y + CEILING_T, WALL_T]}
+                    />
                     <meshStandardMaterial color={shade(wallColor, -0.2)} roughness={0.9} />
                 </mesh>
             )}

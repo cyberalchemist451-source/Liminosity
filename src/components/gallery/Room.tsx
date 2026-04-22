@@ -11,6 +11,7 @@ import EsotericArtifact from './artifacts/EsotericArtifact';
 import ProceduralArtifact from './artifacts/ProceduralArtifact';
 import MarineArtifact from './artifacts/MarineArtifact';
 import MarsArtifact from './artifacts/MarsArtifact';
+import SilenceArtifact from './artifacts/SilenceArtifact';
 import { getSubjectArtifact } from './artifacts/SubjectArtifacts';
 import FractalRoom from './FractalRoom';
 import ForestRoom from './ForestRoom';
@@ -18,6 +19,7 @@ import VoidShaftRoom from './VoidShaftRoom';
 import SolarSystemRoom from './SolarSystemRoom';
 import BridgeOfFacesRoom from './BridgeOfFacesRoom';
 import Dweller from './Dweller';
+import SilenceWatchers from './SilenceWatchers';
 import ArtifactSpotlight from './ArtifactSpotlight';
 
 const WALL_T = 0.2;
@@ -106,6 +108,8 @@ export default function Room({ spec, hasNext, hasPrev, behind = false }: Props) 
                 return <MarineArtifact spec={spec} />;
             case 'museum-of-rust':
                 return <MarsArtifact spec={spec} />;
+            case 'silence':
+                return <SilenceArtifact spec={spec} />;
             default: {
                 // For procedural themes with a strong concrete subject
                 // (library, bone orchard, mirror loop, etc.) we render a
@@ -293,6 +297,10 @@ export default function Room({ spec, hasNext, hasPrev, behind = false }: Props) 
                             ]}
                             facing={spec.dweller.facing}
                         />
+                    ) : null}
+
+                    {theme.id === 'silence' ? (
+                        <SilenceWatchers spec={spec} />
                     ) : null}
                 </>
             )}

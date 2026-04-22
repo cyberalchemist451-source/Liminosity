@@ -114,6 +114,46 @@ export const SCRIPTED_THEMES: Theme[] = [
             ],
         },
     },
+    // Room 4 - scripted milestone. The ambient engine recognises this theme id
+    // and goes completely silent; the room is lined with a ring of suited
+    // watchers that always track the player's head. The infographic is
+    // terse by design; speak softly, or not at all.
+    {
+        id: 'silence',
+        name: 'The Silence',
+        subtitle: 'please observe the observers',
+        wallColor: '#16161a',
+        accentColor: '#e4e0d2',
+        floorMaterial: 'concrete',
+        lightColor: '#d4d0c4',
+        lightIntensity: 0.55,
+        ceiling: 6.4,
+        font: 'major-mono',
+        titleLetterSpacing: 0.45,
+        audioTone: {
+            // Effectively silent; the audio engine also hard-mutes on 'silence'.
+            baseHz: 24,
+            partials: [1],
+            lfoHz: 0.01,
+            noiseCenterHz: 120,
+            noiseGain: 0,
+            bellRatio: 2,
+            bellEverySec: 999,
+        },
+        infographic: {
+            title: 'RULES OF VISIT',
+            body: [
+                'do not speak.',
+                'do not whistle.',
+                'do not hum.',
+                '',
+                'the men will remain.',
+                'they will remember',
+                'whichever face you wear',
+                'when you leave.',
+            ],
+        },
+    },
 ];
 
 const PROCEDURAL_THEMES: Theme[] = [

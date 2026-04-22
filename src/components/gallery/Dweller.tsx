@@ -383,9 +383,11 @@ function GreyHand({
 // ---------------------------------------------------------------------------
 // Faceless Suit (~1.88m) - a man-shaped suit with a perfectly smooth head.
 // Now with proper lapels, collar, tie, segmented limbs, and glossy shoes.
+// Also exported so the Silence Room can build a ring of watchers that track
+// the player's head without going through the Dweller wrapper.
 // ---------------------------------------------------------------------------
 
-function FacelessSuit({ seed }: { seed: number }) {
+export function FacelessSuit({ seed }: { seed: number }) {
     const suit = '#141414';
     const suitHL = '#1f1f1f';
     const shirt = '#e9e9e4';
