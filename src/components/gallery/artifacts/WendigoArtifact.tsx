@@ -26,14 +26,22 @@ import type { RoomSpec } from '@/lib/gallery/types';
 // === CONFIG (mirrors wendigo_skeleton.py) ===================================
 const CONFIG = {
     total_height: 3.048,
-    antler_height_ratio: 0.18,
+    // Tall, elk-sized rack. heightAdd = H * antler_height_ratio is the
+    // vertical reach of each antler from its pedicle; ~0.85m reads as
+    // a mature bull's trophy.
+    antler_height_ratio: 0.28,
 
     bone_segments: 10,
 
-    antler_tines_per_side: 5,
-    antler_spread: 0.9,
-    antler_curve_forward: 0.18,
-    antler_taper: 0.25,
+    // Six points per side (brow, bez, trez, royal, surroyal, terminal
+    // fork) - the classic North American elk silhouette.
+    antler_tines_per_side: 6,
+    antler_spread: 1.2,
+    antler_curve_forward: 0.28,
+    // Less taper so the beam stays thick up into the upper third, then
+    // narrows to the forking tip. Combined with the doubled base radius
+    // this is what gives the rack its heavy, mature-bull weight.
+    antler_taper: 0.5,
 
     cervical_vertebrae: 7,
     thoracic_vertebrae: 12,
@@ -279,59 +287,96 @@ function Antler({
     mat: THREE.Material;
     rng: () => number;
 }) {
-    // Main beam curve - rises, sweeps out laterally, leans forward.
+    // Main beam curve. Elk-style s-sweep: rises nearly vertical, dips
+    // slightly rearward at the pedicle, then sweeps up-out-forward so
+    // the tip finishes well ahead of the skull. The curve is sampled
+    // from five control points and produces the heavy arc you see on a
+    // mature bull.
     const mainCurve = useMemo(() => {
         const spread = CONFIG.antler_spread;
         const forward = CONFIG.antler_curve_forward;
         const heightAdd = H * CONFIG.antler_height_ratio;
         const pts = [
             origin.clone(),
-            origin.clone().add(new THREE.Vector3(side * spread * 0.1, heightAdd * 0.25, forward * 0.1)),
-            origin.clone().add(new THREE.Vector3(side * spread * 0.35, heightAdd * 0.55, forward * 0.4)),
-            origin.clone().add(new THREE.Vector3(side * spread * 0.7, heightAdd * 0.85, forward * 0.7)),
-            origin.clone().add(new THREE.Vector3(side * spread * 0.95, heightAdd * 1.1, forward * 0.9)),
+            origin.clone().add(
+                new THREE.Vector3(side * spread * 0.08, heightAdd * 0.28, -forward * 0.18),
+            ),
+            origin.clone().add(
+                new THREE.Vector3(side * spread * 0.32, heightAdd * 0.6, forward * 0.12),
+            ),
+            origin.clone().add(
+                new THREE.Vector3(side * spread * 0.72, heightAdd * 0.92, forward * 0.62),
+            ),
+            origin.clone().add(
+                new THREE.Vector3(side * spread * 1.0, heightAdd * 1.18, forward * 1.0),
+            ),
         ];
         return new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.4);
     }, [origin, side]);
 
-    // Tines branch off the main beam. Seed drives tine lengths so the rack
-    // is stable per room.
+    // Tines branch off the main beam. Elk tines project mostly FORWARD
+    // from the beam with a slight outward and upward bias; each is long
+    // and heavy near the base (brow, bez, trez) and shorter near the
+    // top. Length / jitter are seeded so each room's rack is stable.
     const tines = useMemo(() => {
+        const count = CONFIG.antler_tines_per_side;
         const out: {
             curve: THREE.CatmullRomCurve3;
             baseRadius: number;
         }[] = [];
-        for (let i = 0; i < CONFIG.antler_tines_per_side; i++) {
-            // Skip t=0 and t=1 - tines come off the middle of the beam.
-            const t = 0.15 + (i / CONFIG.antler_tines_per_side) * 0.75;
+        for (let i = 0; i < count; i++) {
+            // Spread tines from low on the beam (brow, right above the
+            // pedicle) up to near the tip for the terminal fork.
+            const t = 0.1 + (i / count) * 0.82;
             const rootP = mainCurve.getPointAt(t);
-            const tan = mainCurve.getTangentAt(t);
-            // Lateral axis so tines spray further out the same side.
-            const lateral = new THREE.Vector3(side, 0.15, 0).normalize();
-            // Length tapers along the beam - longer tines low, shorter high.
-            const lenScale = 0.28 + (1 - t) * 0.45 * (0.7 + rng() * 0.6);
-            const tineLen = H * 0.14 * lenScale;
-            const jitter = (rng() - 0.5) * 0.25;
-            const dir = tan.clone().multiplyScalar(0.35)
-                .addScaledVector(lateral, 0.85 + jitter)
-                .normalize();
+            // Forward-biased direction: mostly +Z with a slight outward
+            // lean and small upward rise, so tines look like a row of
+            // prongs fanning forward off the beam rather than spraying
+            // sideways like a moose paddle.
+            const jitter = (rng() - 0.5) * 0.22;
+            const dir = new THREE.Vector3(
+                side * (0.22 + jitter * 0.5),
+                0.18 + (1 - t) * 0.15, // brow tines rise more sharply
+                0.92,
+            ).normalize();
+            // Bigger rack overall: base tines reach ~0.42m, upper tines
+            // ~0.22m. First two tines (brow + bez) get an extra bump so
+            // they look like the forward-pointing "eye guards" that elk
+            // are famous for.
+            const lenScale =
+                (i === 0 ? 1.15 : i === 1 ? 1.05 : 0.85) *
+                (0.55 + (1 - t) * 0.55 * (0.8 + rng() * 0.45));
+            const tineLen = H * 0.2 * lenScale;
             const tip = rootP.clone().addScaledVector(dir, tineLen);
-            const mid = rootP.clone().lerp(tip, 0.5)
-                .addScaledVector(new THREE.Vector3(0, 1, 0), tineLen * 0.18);
+            // Slight upward arc for every tine so they curve skyward as
+            // they reach forward.
+            const mid = rootP
+                .clone()
+                .lerp(tip, 0.55)
+                .addScaledVector(new THREE.Vector3(0, 1, 0), tineLen * 0.22);
             const curve = new THREE.CatmullRomCurve3(
                 [rootP, mid, tip],
                 false,
                 'catmullrom',
                 0.35,
             );
-            out.push({ curve, baseRadius: 0.018 * (0.8 + (1 - t) * 0.4) });
+            // Tines are noticeably chunkier than before; brow tine is
+            // the thickest to match its real-world prominence.
+            const tineBase = 0.042 * (i === 0 ? 1.1 : 0.9 + (1 - t) * 0.4);
+            out.push({ curve, baseRadius: tineBase });
         }
         return out;
     }, [mainCurve, side, rng]);
 
     return (
         <group>
-            <AntlerBranch curve={mainCurve} baseRadius={0.034} mat={mat} />
+            {/* Pedicle / burr: a thick ring where the beam attaches to
+                the skull. Sells the weight of the rack. */}
+            <mesh position={origin} castShadow>
+                <sphereGeometry args={[0.062, 14, 10]} />
+                <primitive attach="material" object={mat} />
+            </mesh>
+            <AntlerBranch curve={mainCurve} baseRadius={0.078} mat={mat} />
             {tines.map((t, i) => (
                 <AntlerBranch key={i} curve={t.curve} baseRadius={t.baseRadius} mat={mat} />
             ))}
@@ -339,16 +384,30 @@ function Antler({
     );
 }
 
-// Skull: deformed sphere for the cranium, box for the snout, a simple jaw
-// strip, and a row of tooth cones. Origin is at the base of the skull
+// Skull: deformed sphere for the cranium, a two-segment tapered cow-like
+// snout with a rounded muzzle, a matching long lower jaw, and a row of
+// tooth cones at the snout tip. Origin is at the base of the skull
 // (occipital condyle). The skull orients forward along +Z.
 function Skull({ mat, teethMat }: { mat: THREE.Material; teethMat: THREE.Material }) {
     const skullR = 0.18;
-    // Six small teeth in the upper jaw area.
+    // Long ungulate snout geometry. The snout is modelled as two
+    // stacked tapered cylinders laid along +Z: a thicker "back"
+    // section where it attaches to the cranium, and a narrower "front"
+    // section that runs out to the muzzle. Total snout length is about
+    // 2.3x cranium radius so the skull reads as clearly bovine rather
+    // than humanoid.
+    const snoutStartZ = skullR * 0.55; // where snout attaches to cranium
+    const snoutBackLen = skullR * 1.1;
+    const snoutFrontLen = skullR * 1.2;
+    const snoutY = skullR * 0.78; // centreline of the muzzle
+    const snoutBackCenterZ = snoutStartZ + snoutBackLen / 2;
+    const snoutFrontCenterZ = snoutStartZ + snoutBackLen + snoutFrontLen / 2;
+    const muzzleTipZ = snoutStartZ + snoutBackLen + snoutFrontLen;
+    // Three incisor-like cones across the front of the upper muzzle.
     const teeth = useMemo(
         () =>
-            Array.from({ length: 6 }, (_, i) => ({
-                x: (i - 2.5) * 0.028,
+            Array.from({ length: 4 }, (_, i) => ({
+                x: (i - 1.5) * 0.026,
                 i,
             })),
         [],
@@ -360,41 +419,120 @@ function Skull({ mat, teethMat }: { mat: THREE.Material; teethMat: THREE.Materia
                 <sphereGeometry args={[skullR, 18, 14]} />
                 <primitive attach="material" object={mat} />
             </mesh>
-            {/* Snout / muzzle */}
-            <mesh position={[0, skullR * 0.7, skullR * 0.95]} castShadow>
-                <boxGeometry args={[skullR * 0.7, skullR * 0.55, skullR * 0.9]} />
+            {/* Brow ridge - sits above the eye sockets and is where the
+                antler pedicles emerge from. */}
+            <mesh position={[0, skullR * 1.4, skullR * 0.45]} castShadow>
+                <boxGeometry args={[skullR * 1.55, skullR * 0.2, skullR * 0.4]} />
                 <primitive attach="material" object={mat} />
             </mesh>
-            {/* Brow ridge */}
-            <mesh position={[0, skullR * 1.4, skullR * 0.55]} castShadow>
-                <boxGeometry args={[skullR * 1.5, skullR * 0.18, skullR * 0.4]} />
+            {/* Eye sockets - deep-set dark spheres at the base of the
+                cranium, just behind where the snout starts. */}
+            <mesh position={[-skullR * 0.42, skullR * 1.05, skullR * 0.6]}>
+                <sphereGeometry args={[skullR * 0.2, 10, 8]} />
+                <meshStandardMaterial color="#050505" roughness={0.9} />
+            </mesh>
+            <mesh position={[skullR * 0.42, skullR * 1.05, skullR * 0.6]}>
+                <sphereGeometry args={[skullR * 0.2, 10, 8]} />
+                <meshStandardMaterial color="#050505" roughness={0.9} />
+            </mesh>
+
+            {/* --- Upper snout: two tapered cylinders along +Z -------- */}
+            {/* Back section: wider end against the cranium, narrower at
+                the midpoint transition. */}
+            <mesh
+                position={[0, snoutY, snoutBackCenterZ]}
+                rotation={[Math.PI / 2, 0, 0]}
+                castShadow
+                receiveShadow
+            >
+                <cylinderGeometry
+                    args={[skullR * 0.6, skullR * 0.78, snoutBackLen, 18, 1]}
+                />
                 <primitive attach="material" object={mat} />
             </mesh>
-            {/* Eye sockets - darker spheres pressed into the skull */}
-            <mesh position={[-skullR * 0.35, skullR * 1.05, skullR * 0.7]}>
-                <sphereGeometry args={[skullR * 0.18, 10, 8]} />
-                <meshStandardMaterial color="#050505" roughness={0.9} />
+            {/* Front section: tapers further toward the muzzle tip. */}
+            <mesh
+                position={[0, snoutY, snoutFrontCenterZ]}
+                rotation={[Math.PI / 2, 0, 0]}
+                castShadow
+                receiveShadow
+            >
+                <cylinderGeometry
+                    args={[skullR * 0.46, skullR * 0.6, snoutFrontLen, 16, 1]}
+                />
+                <primitive attach="material" object={mat} />
             </mesh>
-            <mesh position={[skullR * 0.35, skullR * 1.05, skullR * 0.7]}>
-                <sphereGeometry args={[skullR * 0.18, 10, 8]} />
-                <meshStandardMaterial color="#050505" roughness={0.9} />
+            {/* Rounded muzzle cap so the nose isn't a flat disc. */}
+            <mesh position={[0, snoutY, muzzleTipZ]} castShadow>
+                <sphereGeometry args={[skullR * 0.46, 14, 10]} />
+                <primitive attach="material" object={mat} />
             </mesh>
-            {/* Lower jaw */}
-            <group position={[0, skullR * 0.32, skullR * 0.7]} rotation={[0.08, 0, 0]}>
-                <mesh castShadow>
-                    <boxGeometry args={[skullR * 0.85, skullR * 0.18, skullR * 1.1]} />
+            {/* Dorsal nasal ridge - a slight raised spine along the top
+                of the snout that reads as skeletal when lit from above. */}
+            <mesh
+                position={[0, snoutY + skullR * 0.38, snoutBackCenterZ + snoutFrontLen * 0.25]}
+                castShadow
+            >
+                <boxGeometry args={[skullR * 0.22, skullR * 0.1, snoutBackLen + snoutFrontLen * 0.6]} />
+                <primitive attach="material" object={mat} />
+            </mesh>
+            {/* Nasal cavity - the iconic dark heart-shaped hollow at
+                the front of a cow skull. Built from two offset dark
+                spheres so it reads as a split opening, not a round
+                nostril. */}
+            <mesh position={[-skullR * 0.16, snoutY + skullR * 0.08, muzzleTipZ - skullR * 0.22]}>
+                <sphereGeometry args={[skullR * 0.16, 10, 8]} />
+                <meshStandardMaterial color="#070504" roughness={0.95} />
+            </mesh>
+            <mesh position={[skullR * 0.16, snoutY + skullR * 0.08, muzzleTipZ - skullR * 0.22]}>
+                <sphereGeometry args={[skullR * 0.16, 10, 8]} />
+                <meshStandardMaterial color="#070504" roughness={0.95} />
+            </mesh>
+
+            {/* --- Lower jaw: matches the upper snout length -------- */}
+            <group
+                position={[0, skullR * 0.4, snoutStartZ * 0.6]}
+                rotation={[0.05, 0, 0]}
+            >
+                {/* Jaw bar running along +Z, tapered to match the snout. */}
+                <mesh
+                    position={[0, 0, (snoutBackLen + snoutFrontLen) / 2]}
+                    rotation={[Math.PI / 2, 0, 0]}
+                    castShadow
+                    receiveShadow
+                >
+                    <cylinderGeometry
+                        args={[
+                            skullR * 0.38,
+                            skullR * 0.55,
+                            snoutBackLen + snoutFrontLen,
+                            14,
+                            1,
+                        ]}
+                    />
+                    <primitive attach="material" object={mat} />
+                </mesh>
+                {/* Chin cap */}
+                <mesh
+                    position={[0, 0, snoutBackLen + snoutFrontLen]}
+                    castShadow
+                >
+                    <sphereGeometry args={[skullR * 0.38, 12, 10]} />
                     <primitive attach="material" object={mat} />
                 </mesh>
             </group>
-            {/* Teeth: a short row of tiny cones on the upper jaw */}
+
+            {/* Teeth: a small row of incisor cones at the muzzle tip
+                (cows have no upper incisors - these are the lower
+                incisors poking up past the jawline). */}
             {teeth.map(({ x, i }) => (
                 <mesh
                     key={i}
-                    position={[x, skullR * 0.52, skullR * 1.32]}
+                    position={[x, snoutY - skullR * 0.28, muzzleTipZ - skullR * 0.05]}
                     rotation={[Math.PI, 0, 0]}
                     castShadow
                 >
-                    <coneGeometry args={[0.008, 0.05, 6]} />
+                    <coneGeometry args={[0.009, 0.055, 6]} />
                     <primitive attach="material" object={teethMat} />
                 </mesh>
             ))}
@@ -820,15 +958,19 @@ function NeckAndSkull({ mats, rng }: { mats: Materials; rng: () => number }) {
             {/* Skull perched on top */}
             <group position={[0, a.skullBase - a.thoracicEnd + 0.03, 0.05]} rotation={[lean * 0.4, 0, 0]}>
                 <Skull mat={mats.bone} teethMat={mats.teeth} />
-                {/* Antlers: two racks emerging from the brow ridge */}
+                {/* Antlers: two racks rooted in thick pedicles above
+                    the brow ridge. Origins are pushed slightly wider
+                    and further back than the light-weight rack would
+                    allow so the new elk-sized beams don't intersect
+                    each other at the base. */}
                 <Antler
-                    origin={new THREE.Vector3(-0.06, 0.29, 0.02)}
+                    origin={new THREE.Vector3(-0.1, 0.33, -0.015)}
                     side={-1}
                     mat={mats.boneDark}
                     rng={rng}
                 />
                 <Antler
-                    origin={new THREE.Vector3(0.06, 0.29, 0.02)}
+                    origin={new THREE.Vector3(0.1, 0.33, -0.015)}
                     side={1}
                     mat={mats.boneDark}
                     rng={rng}
