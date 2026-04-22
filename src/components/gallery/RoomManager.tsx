@@ -63,8 +63,15 @@ export default function RoomManager() {
                 // point light. Combined with the RENDER_BEHIND window this
                 // is what keeps FPS stable as the gallery deepens.
                 const isBehind = i < currentIndex;
+                // Elevate the whole (room + outgoing hallway) pair by the
+                // room's persistent floor height. Every interior component
+                // can keep using local y = 0 for the floor while the gallery
+                // accumulates altitude section by section.
                 return (
-                    <group key={`section-${i}`}>
+                    <group
+                        key={`section-${i}`}
+                        position={[0, room.origin[1], 0]}
+                    >
                         <Room
                             spec={room}
                             hasPrev={i > 0}

@@ -1,12 +1,16 @@
 import type { RoomSpec } from './types';
 import { HALLWAY_LENGTH, HALLWAY_WIDTH } from './roomGenerator';
 
-// The stairs hallway climbs up over the first 6m, plateaus for 16m, then
-// descends for the last 6m. The plateau height is chosen to read as a full
-// flight of stairs without pushing the player through the ceiling.
+// The stairs hallway climbs up over the first 6m and then holds its new
+// altitude for the rest of the corridor. The rise is one-way: every room
+// past a stairs hallway lives at the new elevation permanently, and the
+// museum's baseline floor height accumulates as the player climbs more
+// staircases. The PLATEAU constant is the flat portion after the rise.
 export const STAIRS_RUN = 6.0;
-export const STAIRS_PLATEAU = 16.0; // HALLWAY_LENGTH - 2*STAIRS_RUN
 export const STAIRS_RISE = 2.8;
+// HALLWAY_LENGTH - STAIRS_RUN. Exported so StairsHallway doesn't have to
+// re-derive it.
+export const STAIRS_PLATEAU = 22.0;
 
 // The jog hallway has two 90-degree turns. Entry and exit are both at x=0
 // so neighbouring rooms still stack along +Z; between them the corridor
@@ -158,28 +162,32 @@ function clamp(v: number, min: number, max: number) {
     return Math.max(min, Math.min(max, v));
 }
 
-// Vertical ground elevation at a world-space (x, z) point. Returns 0 inside
-// ordinary rooms and straight hallways. The stairs-variant hallway of a
-// given room returns a piecewise-linear ramp: rising for STAIRS_RUN metres,
-// plateauing at STAIRS_RISE for STAIRS_PLATEAU metres, then descending
-// symmetrically. Everything else stays at y=0 so rooms don't need to know
-// about elevation.
+// Vertical ground elevation at a world-space (x, z) point.
+//
+// Each room carries its absolute floor height in origin[1]. Straight-style
+// hallways sit at the from-room's floor. A stairs-variant hallway ramps
+// from the from-room's floor up to the next room's floor over the first
+// STAIRS_RUN metres and holds that new altitude for the remaining
+// STAIRS_PLATEAU metres; the next room lives at that new altitude
+// permanently. This is how the museum gains elevation as the player
+// climbs deeper.
 export function groundYAt(rooms: RoomSpec[], _x: number, z: number): number {
     for (let i = 0; i < rooms.length; i++) {
         const room = rooms[i];
-        if ((room.hallwayVariant ?? 'straight') !== 'stairs') continue;
-        const startZ = room.origin[2] + room.depth / 2;
-        const endZ = startZ + HALLWAY_LENGTH;
-        if (z < startZ || z > endZ) continue;
-        const local = z - startZ;
-        if (local <= STAIRS_RUN) {
-            return STAIRS_RISE * (local / STAIRS_RUN);
+        const rb = getRoomBounds(room);
+        if (z >= rb.minZ && z <= rb.maxZ) {
+            return room.origin[1];
         }
-        if (local <= STAIRS_RUN + STAIRS_PLATEAU) {
-            return STAIRS_RISE;
+        const hb = getHallwayBounds(room);
+        if (z >= hb.minZ && z <= hb.maxZ) {
+            const base = room.origin[1];
+            if ((room.hallwayVariant ?? 'straight') !== 'stairs') return base;
+            const local = z - hb.minZ;
+            if (local <= STAIRS_RUN) {
+                return base + STAIRS_RISE * (local / STAIRS_RUN);
+            }
+            return base + STAIRS_RISE;
         }
-        const tail = local - (STAIRS_RUN + STAIRS_PLATEAU);
-        return STAIRS_RISE * (1 - tail / STAIRS_RUN);
     }
     return 0;
 }

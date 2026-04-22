@@ -1,6 +1,7 @@
 import type { RoomSpec, Pillar, Vec3, DwellerSpec, DwellerKind, HallwayVariant } from './types';
 import { getTheme, MILESTONE_THEMES, SCRIPTED_THEMES } from './themes';
 import { rand, randInt, rngFor, pick, type Rng } from './rng';
+import { STAIRS_RISE } from './collision';
 
 export const HALLWAY_LENGTH = 28;
 export const HALLWAY_WIDTH = 3.6;
@@ -138,13 +139,20 @@ export function generateRoom(index: number, seed: number, priorRooms: RoomSpec[]
 
     const tilt = Math.min(0.08, index * 0.007);
 
+    // Each room's floor elevation is the previous room's floor plus any
+    // climb that the previous room's outgoing hallway introduced. Only the
+    // stairs variant rises (one-way); every other variant holds altitude.
+    // Room 0 anchors the gallery at y=0.
     const originCenter: Vec3 =
         index === 0
             ? [0, 0, 0]
             : (() => {
                   const prev = priorRooms[index - 1];
                   const frontOfRoomZ = prev.origin[2] + prev.depth / 2 + HALLWAY_LENGTH + depth / 2;
-                  return [0, 0, frontOfRoomZ] as Vec3;
+                  const floorY =
+                      prev.origin[1] +
+                      (prev.hallwayVariant === 'stairs' ? STAIRS_RISE : 0);
+                  return [0, floorY, frontOfRoomZ] as Vec3;
               })();
 
     const frontZ = originCenter[2] - depth / 2;

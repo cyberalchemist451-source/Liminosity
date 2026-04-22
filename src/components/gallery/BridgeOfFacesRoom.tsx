@@ -118,7 +118,9 @@ export default function BridgeOfFacesRoom({ spec, hasPrev, hasNext, behind = fal
         // kill the player - they have to actually step off.
         if (Math.abs(dx) > BRIDGE_HALF_WIDTH - 0.1) {
             triggeredRef.current = true;
-            triggerFall([ox, 1.65, backZ + 3.0]);
+            // Eye height is relative to this room's persistent floor
+            // elevation; the outgoing hallway inherits that altitude.
+            triggerFall([ox, origin[1] + 1.65, backZ + 3.0]);
         }
     });
 

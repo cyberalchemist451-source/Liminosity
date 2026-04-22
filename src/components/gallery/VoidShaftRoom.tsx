@@ -62,10 +62,12 @@ export default function VoidShaftRoom({ spec, hasPrev, behind = false }: Props) 
         if (!insideRoom) return;
         if (Math.hypot(dx, dz) < HOLE_RADIUS - 0.1) {
             triggeredRef.current = true;
-            // Target: 3m into the hallway past this room's back wall, camera
-            // at standard eye height, facing +Z.
+            // Target: 3m into the hallway past this room's back wall,
+            // camera at standard eye height relative to THIS room's
+            // persistent floor elevation (the outgoing hallway sits at
+            // the same altitude), facing +Z.
             const backZ = origin[2] + depth / 2;
-            triggerFall([ox, 1.65, backZ + 3.0]);
+            triggerFall([ox, origin[1] + 1.65, backZ + 3.0]);
         }
     });
 

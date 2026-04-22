@@ -125,7 +125,10 @@ export function RoomLights({ theme, origin, width, depth, ceilingHeight }: RoomL
             {fixtures.map(([lx, lz], i) => (
                 <Fluorescent
                     key={i}
-                    position={[origin[0] + lx, origin[1] + ceilingHeight - 0.3, origin[2] + lz]}
+                    // Y is in local (floor-relative) coordinates - the
+                    // section wrapper in RoomManager translates us up to
+                    // this room's persistent floor height.
+                    position={[origin[0] + lx, ceilingHeight - 0.3, origin[2] + lz]}
                     color={theme.lightColor}
                     intensity={theme.lightIntensity * 1.35}
                     flicker
