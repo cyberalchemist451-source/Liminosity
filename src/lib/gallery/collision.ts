@@ -75,8 +75,32 @@ export function getHallwaySegments(room: RoomSpec): AABB[] {
         return [spur, forward];
     }
 
-    // All non-L variants share the same straight +Z footprint centered on
-    // the exit room's origin.x.
+    // Jog: the corridor doglegs sideways by `hallwayJogOffset` in the
+    // middle stretch, so the walkable footprint's X extent covers both
+    // the stem (centred on ox) AND the offset middle. Fine-grained
+    // clamping per sub-segment is done by getJogHallwayXRange in
+    // resolveSliding; the segment returned here is just the outer
+    // bounding box so the "player is inside this hallway" test accepts
+    // the middle stretch. Without this, a player walking into the jog's
+    // offset middle falls out of every hallway match and the collision
+    // fallback teleports them into the farthest pre-generated room.
+    if (variant === 'jog') {
+        const off = room.hallwayJogOffset ?? 0;
+        const minOff = Math.min(0, off);
+        const maxOff = Math.max(0, off);
+        return [
+            {
+                minX: ox + minOff - hwHalf,
+                maxX: ox + maxOff + hwHalf,
+                minZ: backZ,
+                maxZ: backZ + HALLWAY_LENGTH,
+            },
+        ];
+    }
+
+    // All remaining variants (straight / curved / stairs / bridge /
+    // aquarium) share the same straight +Z footprint centred on the
+    // exit room's origin.x.
     return [
         {
             minX: ox - hwHalf,
@@ -286,14 +310,25 @@ export function resolveSliding(
     }
 
     // ---- Fallback --------------------------------------------------
-    const last = rooms[rooms.length - 1];
-    if (last) {
-        const rb = getRoomBounds(last);
-        const x = clamp(px, rb.minX + radius, rb.maxX - radius);
-        const z = clamp(pz, rb.minZ + radius, rb.maxZ - radius);
-        return { x, z };
+    //
+    // The proposed point lies in no room AND no hallway - usually a tiny
+    // numerical slip at a doorway edge. Clamp to the room whose centre
+    // is *nearest* in Z so we don't yank the player across the gallery
+    // (which would happen if we always fell back to rooms[last]).
+    if (rooms.length === 0) return { x: px, z: pz };
+    let nearest = rooms[0];
+    let nearestD = Math.abs(pz - nearest.origin[2]);
+    for (let i = 1; i < rooms.length; i++) {
+        const d = Math.abs(pz - rooms[i].origin[2]);
+        if (d < nearestD) {
+            nearest = rooms[i];
+            nearestD = d;
+        }
     }
-    return { x: px, z: pz };
+    const rb = getRoomBounds(nearest);
+    const x = clamp(px, rb.minX + radius, rb.maxX - radius);
+    const z = clamp(pz, rb.minZ + radius, rb.maxZ - radius);
+    return { x, z };
 }
 
 // Clamp the player inside a given room's AABB, opening whichever wall
