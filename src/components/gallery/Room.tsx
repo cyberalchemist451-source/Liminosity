@@ -12,6 +12,7 @@ import ProceduralArtifact from './artifacts/ProceduralArtifact';
 import MarineArtifact from './artifacts/MarineArtifact';
 import MarsArtifact from './artifacts/MarsArtifact';
 import SilenceArtifact from './artifacts/SilenceArtifact';
+import WendigoArtifact from './artifacts/WendigoArtifact';
 import { getSubjectArtifact } from './artifacts/SubjectArtifacts';
 import FractalRoom from './FractalRoom';
 import ForestRoom from './ForestRoom';
@@ -110,6 +111,8 @@ export default function Room({ spec, hasNext, hasPrev, behind = false }: Props) 
                 return <MarsArtifact spec={spec} />;
             case 'silence':
                 return <SilenceArtifact spec={spec} />;
+            case 'wendigo-reliquary':
+                return <WendigoArtifact spec={spec} />;
             default: {
                 // For procedural themes with a strong concrete subject
                 // (library, bone orchard, mirror loop, etc.) we render a

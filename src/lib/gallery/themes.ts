@@ -1750,7 +1750,52 @@ export const SOLAR_SYSTEM_THEME: Theme = {
 const MUSEUM_OF_RUST_THEME: Theme = PROCEDURAL_THEMES.find(
     (t) => t.id === 'museum-of-rust',
 )!;
+
+// Room 6 (index 5). A small, dim reliquary room whose single exhibit is a
+// ten-foot articulated wendigo skeleton. The palette is cold ash and
+// tannic bark; the ceiling is pitched high so the antler rack has room to
+// read. Lighting is kept low on purpose so the silhouette does the work.
+const WENDIGO_RELIQUARY_THEME: Theme = {
+    id: 'wendigo-reliquary',
+    name: 'The Reliquary',
+    subtitle: 'what was taken back from the trees',
+    wallColor: '#2a2622',
+    accentColor: '#c9b58a',
+    floorMaterial: 'wood',
+    lightColor: '#e0d2b2',
+    lightIntensity: 0.55,
+    ceiling: 6.2,
+    font: 'unifraktur',
+    titleLetterSpacing: 0.12,
+    audioTone: {
+        baseHz: 42,
+        partials: [1, 1.5, 2.0, 2.667, 3.5],
+        lfoHz: 0.035,
+        noiseCenterHz: 520,
+        noiseGain: 0.085,
+        bellRatio: 2.5,
+        bellEverySec: 31,
+    },
+    infographic: {
+        title: 'CATALOGUE ENTRY',
+        body: [
+            'recovered: 1889',
+            'locality: upper peninsula',
+            'specimen: articulated',
+            '',
+            'height: ten feet',
+            'sex: indeterminate',
+            'age at recovery: not applicable',
+            '',
+            'the trappers who brought it',
+            'did not come back',
+            'for the second trip.',
+        ],
+    },
+};
+
 export const MILESTONE_THEMES: Record<number, Theme> = {
+    5: WENDIGO_RELIQUARY_THEME,
     7: MUSEUM_OF_RUST_THEME,
     8: FRACTAL_CHAPEL_THEME,
     14: MARINE_BIOLOGY_THEME,

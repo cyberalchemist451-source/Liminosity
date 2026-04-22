@@ -7,6 +7,7 @@ export type ThemeId =
     | 'ai-history'
     | 'forbidden-knowledge'
     | 'silence'
+    | 'wendigo-reliquary'
     | 'mycelium-cathedral'
     | 'mirror-loop'
     | 'infinite-library'
