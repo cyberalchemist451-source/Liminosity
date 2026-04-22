@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import type { RoomSpec, FloorMaterial } from '@/lib/gallery/types';
+import type { RoomSpec, FloorMaterial, ThemeId } from '@/lib/gallery/types';
 import Infographic from './Infographic';
 import { RoomLights } from './Lighting';
 import UFOArtifact from './artifacts/UFOArtifact';
@@ -24,6 +24,20 @@ import SilenceWatchers from './SilenceWatchers';
 import ArtifactSpotlight from './ArtifactSpotlight';
 
 const WALL_T = 0.2;
+
+// Themes whose centerpiece artifact has a clear "front" (a face, an
+// extended hand, a glass panel, a briefcase opening). These get rotated
+// 180 degrees around Y when placed on the plinth so they face the room's
+// entrance (the front wall at -Z from origin) rather than the back wall
+// or exit corridor. Artifacts that are radially symmetric or do their
+// own rotation animation aren't listed here.
+const FRONT_FACING_ARTIFACT_THEMES: ReadonlySet<ThemeId> = new Set<ThemeId>([
+    'wendigo-reliquary',
+    'silence',
+    'hollow-saint',
+    'red-vending',
+    'bone-orchard',
+]);
 
 function floorMaterialProps(m: FloorMaterial, color: string): THREE.MeshStandardMaterialParameters {
     switch (m) {
@@ -381,7 +395,19 @@ export default function Room({ spec, hasNext, hasPrev, behind = false }: Props) 
                                 metalness={0.1}
                             />
                         </mesh>
-                        {renderArtifact()}
+                        {/* Directional artifacts are wrapped in a group
+                            rotated 180 degrees around Y so their model
+                            forward (+Z) points at the room's entrance
+                            wall (-Z in room-local space). The plinth
+                            box and spotlight sit outside this wrap
+                            because they're symmetric. */}
+                        {FRONT_FACING_ARTIFACT_THEMES.has(theme.id) ? (
+                            <group rotation={[0, Math.PI, 0]}>
+                                {renderArtifact()}
+                            </group>
+                        ) : (
+                            renderArtifact()
+                        )}
                         <ArtifactSpotlight
                             ceilingHeight={ceilingHeight}
                             color={theme.lightColor}
