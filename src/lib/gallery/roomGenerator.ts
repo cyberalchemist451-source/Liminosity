@@ -1,7 +1,7 @@
 import type { RoomSpec, Pillar, Vec3, DwellerSpec, DwellerKind, HallwayVariant } from './types';
 import { getTheme, MILESTONE_THEMES, SCRIPTED_THEMES } from './themes';
 import { rand, randInt, rngFor, pick, type Rng } from './rng';
-import { STAIRS_RISE } from './collision';
+import { STAIRS_RISE, L_SIDE_LEN, L_DOORWAY_SETBACK } from './collision';
 
 export const HALLWAY_LENGTH = 28;
 export const HALLWAY_WIDTH = 3.6;
@@ -140,19 +140,35 @@ export function generateRoom(index: number, seed: number, priorRooms: RoomSpec[]
     const tilt = Math.min(0.08, index * 0.007);
 
     // Each room's floor elevation is the previous room's floor plus any
-    // climb that the previous room's outgoing hallway introduced. Only the
-    // stairs variant rises (one-way); every other variant holds altitude.
-    // Room 0 anchors the gallery at y=0.
+    // climb that the previous room's outgoing hallway introduced. Only
+    // the stairs variant rises (one-way). L-exits shift the next room
+    // LATERALLY: their forward stretch runs +Z offset in X from the
+    // prev room, so the next room's centreline must move with it, and
+    // the front-of-room Z is slightly closer because the L spur starts
+    // L_DOORWAY_SETBACK metres inside the back wall.
     const originCenter: Vec3 =
         index === 0
             ? [0, 0, 0]
             : (() => {
                   const prev = priorRooms[index - 1];
-                  const frontOfRoomZ = prev.origin[2] + prev.depth / 2 + HALLWAY_LENGTH + depth / 2;
+                  const prevVariant = prev.hallwayVariant ?? 'straight';
+                  const backOfPrevZ = prev.origin[2] + prev.depth / 2;
+                  const prevX = prev.origin[0];
+                  let originX = prevX;
+                  let frontOfRoomZ = backOfPrevZ + HALLWAY_LENGTH + depth / 2;
+                  if (prevVariant === 'l-right') {
+                      originX = prevX + prev.width / 2 + L_SIDE_LEN;
+                      const doorwayZ = backOfPrevZ - L_DOORWAY_SETBACK;
+                      frontOfRoomZ = doorwayZ + HALLWAY_LENGTH + depth / 2;
+                  } else if (prevVariant === 'l-left') {
+                      originX = prevX - prev.width / 2 - L_SIDE_LEN;
+                      const doorwayZ = backOfPrevZ - L_DOORWAY_SETBACK;
+                      frontOfRoomZ = doorwayZ + HALLWAY_LENGTH + depth / 2;
+                  }
                   const floorY =
                       prev.origin[1] +
-                      (prev.hallwayVariant === 'stairs' ? STAIRS_RISE : 0);
-                  return [0, floorY, frontOfRoomZ] as Vec3;
+                      (prevVariant === 'stairs' ? STAIRS_RISE : 0);
+                  return [originX, floorY, frontOfRoomZ] as Vec3;
               })();
 
     const frontZ = originCenter[2] - depth / 2;
@@ -187,22 +203,32 @@ export function generateRoom(index: number, seed: number, priorRooms: RoomSpec[]
     const dweller = freeform ? rollDweller(rng, index, width, depth) : undefined;
     const sealedBack = theme.id === 'void-shaft';
 
-    // Roll a variant for the hallway that leaves this room. Held to the
-    // straight default for the opening few sections, and forced to straight
-    // when the departure is architecturally fragile (the Drop drops the
-    // player *into* this hallway so it must be flat and navigable).
+    // Roll a variant for the hallway that leaves this room. Held to
+    // straight for the opening few sections and forced to straight when
+    // the departure is architecturally fragile (the Drop drops the
+    // player *into* this hallway so it must be flat and navigable, and
+    // scripted-scene rooms don't support side exits). Side-exit (l-left
+    // / l-right) rooms are otherwise disallowed directly after a
+    // staircase so the spur doesn't sit on the climb.
     //
-    // Weighted pool: jog hallways with their 90-degree corners appear more
-    // often than any single other variant so the museum feels properly
-    // winding. Roughly 32% of hallways get a variant overall, of which
-    // jogs are ~40%.
+    // Weighted pool: jog hallways appear most often, side exits next,
+    // the others round out the variety. ~38% of hallways get a variant
+    // overall.
+    const prevVariant = priorRooms[index - 1]?.hallwayVariant;
     const hallwayVariant: HallwayVariant = (() => {
         if (index < 3) return 'straight';
         if (theme.id === 'void-shaft') return 'straight';
         if (theme.id === 'forest-grove') return 'straight';
         if (theme.id === 'solar-system') return 'straight';
         if (theme.id === 'bridge-of-faces') return 'straight';
-        if (rng() >= 0.32) return 'straight';
+        if (rng() >= 0.38) return 'straight';
+        // Avoid back-to-back L exits so lateral drift stays modest, and
+        // don't follow a stairs hallway with an L (the new elevation
+        // plus a perpendicular spur reads as awkward).
+        const banL =
+            prevVariant === 'l-left' ||
+            prevVariant === 'l-right' ||
+            prevVariant === 'stairs';
         const weighted: HallwayVariant[] = [
             'jog', 'jog', 'jog', 'jog', // 4
             'curved', 'curved',          // 2
@@ -210,6 +236,9 @@ export function generateRoom(index: number, seed: number, priorRooms: RoomSpec[]
             'bridge',                    // 1
             'aquarium',                  // 1
         ];
+        if (!banL) {
+            weighted.push('l-left', 'l-left', 'l-right', 'l-right');
+        }
         return pick(rng, weighted);
     })();
 

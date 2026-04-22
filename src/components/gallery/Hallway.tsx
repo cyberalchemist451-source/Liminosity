@@ -10,6 +10,7 @@ import BridgeHallway from './hallways/BridgeHallway';
 import AquariumHallway from './hallways/AquariumHallway';
 import CurvedHallway from './hallways/CurvedHallway';
 import JogHallway from './hallways/JogHallway';
+import LHallway from './hallways/LHallway';
 
 const WALL_T = 0.2;
 
@@ -25,24 +26,37 @@ type Props = {
 };
 
 // Dispatches to the appropriate hallway renderer based on fromRoom's variant.
-// Collision logic treats the walkable footprint as a straight AABB regardless
-// of variant; only 'stairs' varies the vertical ground height.
+// Every non-L variant is written in a coordinate frame centred on x = 0;
+// wrapping the dispatched renderer in a group offset by fromRoom.origin[0]
+// lets those variants work unchanged even for rooms that sit laterally
+// off-axis after an L-exit. The L variants render in world X directly and
+// therefore bypass the group (passing through fromRoom).
 export default function Hallway({ fromRoom, toRoom }: Props) {
     const variant = fromRoom.hallwayVariant ?? 'straight';
-    switch (variant) {
-        case 'stairs':
-            return <StairsHallway fromRoom={fromRoom} toRoom={toRoom} />;
-        case 'bridge':
-            return <BridgeHallway fromRoom={fromRoom} toRoom={toRoom} />;
-        case 'aquarium':
-            return <AquariumHallway fromRoom={fromRoom} toRoom={toRoom} />;
-        case 'curved':
-            return <CurvedHallway fromRoom={fromRoom} toRoom={toRoom} />;
-        case 'jog':
-            return <JogHallway fromRoom={fromRoom} toRoom={toRoom} />;
-        default:
-            return <StraightHallway fromRoom={fromRoom} toRoom={toRoom} />;
+    if (variant === 'l-left' || variant === 'l-right') {
+        return <LHallway fromRoom={fromRoom} toRoom={toRoom} />;
     }
+    const cx = fromRoom.origin[0];
+    return (
+        <group position={[cx, 0, 0]}>
+            {(() => {
+                switch (variant) {
+                    case 'stairs':
+                        return <StairsHallway fromRoom={fromRoom} toRoom={toRoom} />;
+                    case 'bridge':
+                        return <BridgeHallway fromRoom={fromRoom} toRoom={toRoom} />;
+                    case 'aquarium':
+                        return <AquariumHallway fromRoom={fromRoom} toRoom={toRoom} />;
+                    case 'curved':
+                        return <CurvedHallway fromRoom={fromRoom} toRoom={toRoom} />;
+                    case 'jog':
+                        return <JogHallway fromRoom={fromRoom} toRoom={toRoom} />;
+                    default:
+                        return <StraightHallway fromRoom={fromRoom} toRoom={toRoom} />;
+                }
+            })()}
+        </group>
+    );
 }
 
 // ---------------------------------------------------------------------------

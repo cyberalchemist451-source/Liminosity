@@ -129,16 +129,27 @@ export type Pillar = {
     color: string;
 };
 
-// Variants for the corridor that leads OUT of a room. All variants share the
-// same straight-AABB walkable footprint; 'stairs' additionally carries a
-// self-contained vertical bump (up-plateau-down) so rooms stay at floorY 0.
+// Variants for the corridor that leads OUT of a room.
+//
+// Most variants share a straight-AABB walkable footprint along +Z centered
+// on the from-room's origin.x, with the exit doorway cut from the back
+// wall. 'stairs' additionally adds a one-way climb.
+//
+// The two 'l-' variants are different: they exit through the *side* wall
+// of the from-room (left or right, near the back), travel perpendicular
+// for a short spur, turn 90 degrees, and then continue +Z to the next
+// room's front doorway. This also laterally offsets the next room's
+// origin so the gallery snakes sideways instead of running in a perfect
+// column.
 export type HallwayVariant =
     | 'straight'
     | 'curved'
     | 'stairs'
     | 'bridge'
     | 'aquarium'
-    | 'jog';
+    | 'jog'
+    | 'l-left'
+    | 'l-right';
 
 export type RoomSpec = {
     index: number;

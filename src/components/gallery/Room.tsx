@@ -97,6 +97,24 @@ export default function Room({ spec, hasNext, hasPrev, behind = false }: Props) 
     const dh = doorwayHeight;
     const sideW = (width - dw) / 2;
 
+    // Exit side: 'forward' cuts the doorway in the back wall (default),
+    // 'left' / 'right' cut it in the corresponding side wall near the
+    // back corner and leave the back wall solid. The side doorway centre
+    // sits L_DOORWAY_SETBACK (2.6m) inside the back wall so the hallway
+    // spur lives outside the room entirely.
+    const exitVariant = spec.hallwayVariant;
+    const exitSide: 'forward' | 'left' | 'right' =
+        exitVariant === 'l-left'
+            ? 'left'
+            : exitVariant === 'l-right'
+              ? 'right'
+              : 'forward';
+    const sideDoorwayCenterZ = oz + dHalf - 2.6;
+    const zBefore = sideDoorwayCenterZ - dw / 2;
+    const zAfter = sideDoorwayCenterZ + dw / 2;
+    const lenBefore = zBefore - (oz - dHalf);
+    const lenAfter = oz + dHalf - zAfter;
+
     const renderArtifact = () => {
         switch (theme.id) {
             case 'ufo':
@@ -146,23 +164,109 @@ export default function Room({ spec, hasNext, hasPrev, behind = false }: Props) 
                 <meshStandardMaterial color={ceilingColor} roughness={0.9} />
             </mesh>
 
-            {/* Side walls (east / west) */}
-            <mesh
-                position={[ox - wHalf - WALL_T / 2, ceilingHeight / 2, oz]}
-                castShadow
-                receiveShadow
-            >
-                <boxGeometry args={[WALL_T, ceilingHeight, depth]} />
-                <meshStandardMaterial color={theme.wallColor} roughness={0.75} />
-            </mesh>
-            <mesh
-                position={[ox + wHalf + WALL_T / 2, ceilingHeight / 2, oz]}
-                castShadow
-                receiveShadow
-            >
-                <boxGeometry args={[WALL_T, ceilingHeight, depth]} />
-                <meshStandardMaterial color={theme.wallColor} roughness={0.75} />
-            </mesh>
+            {/* Left (west) wall */}
+            {hasNext && exitSide === 'left' ? (
+                <>
+                    {/* Before the doorway (front-side strip) */}
+                    <mesh
+                        position={[
+                            ox - wHalf - WALL_T / 2,
+                            ceilingHeight / 2,
+                            (oz - dHalf + zBefore) / 2,
+                        ]}
+                        castShadow
+                        receiveShadow
+                    >
+                        <boxGeometry args={[WALL_T, ceilingHeight, Math.max(0.01, lenBefore)]} />
+                        <meshStandardMaterial color={theme.wallColor} roughness={0.75} />
+                    </mesh>
+                    {/* After the doorway (back-side strip) */}
+                    <mesh
+                        position={[
+                            ox - wHalf - WALL_T / 2,
+                            ceilingHeight / 2,
+                            (zAfter + oz + dHalf) / 2,
+                        ]}
+                        castShadow
+                        receiveShadow
+                    >
+                        <boxGeometry args={[WALL_T, ceilingHeight, Math.max(0.01, lenAfter)]} />
+                        <meshStandardMaterial color={theme.wallColor} roughness={0.75} />
+                    </mesh>
+                    {/* Lintel above the side doorway */}
+                    <mesh
+                        position={[
+                            ox - wHalf - WALL_T / 2,
+                            (ceilingHeight + dh) / 2,
+                            sideDoorwayCenterZ,
+                        ]}
+                        castShadow
+                        receiveShadow
+                    >
+                        <boxGeometry args={[WALL_T, ceilingHeight - dh, dw]} />
+                        <meshStandardMaterial color={theme.wallColor} roughness={0.75} />
+                    </mesh>
+                </>
+            ) : (
+                <mesh
+                    position={[ox - wHalf - WALL_T / 2, ceilingHeight / 2, oz]}
+                    castShadow
+                    receiveShadow
+                >
+                    <boxGeometry args={[WALL_T, ceilingHeight, depth]} />
+                    <meshStandardMaterial color={theme.wallColor} roughness={0.75} />
+                </mesh>
+            )}
+            {/* Right (east) wall */}
+            {hasNext && exitSide === 'right' ? (
+                <>
+                    <mesh
+                        position={[
+                            ox + wHalf + WALL_T / 2,
+                            ceilingHeight / 2,
+                            (oz - dHalf + zBefore) / 2,
+                        ]}
+                        castShadow
+                        receiveShadow
+                    >
+                        <boxGeometry args={[WALL_T, ceilingHeight, Math.max(0.01, lenBefore)]} />
+                        <meshStandardMaterial color={theme.wallColor} roughness={0.75} />
+                    </mesh>
+                    <mesh
+                        position={[
+                            ox + wHalf + WALL_T / 2,
+                            ceilingHeight / 2,
+                            (zAfter + oz + dHalf) / 2,
+                        ]}
+                        castShadow
+                        receiveShadow
+                    >
+                        <boxGeometry args={[WALL_T, ceilingHeight, Math.max(0.01, lenAfter)]} />
+                        <meshStandardMaterial color={theme.wallColor} roughness={0.75} />
+                    </mesh>
+                    <mesh
+                        position={[
+                            ox + wHalf + WALL_T / 2,
+                            (ceilingHeight + dh) / 2,
+                            sideDoorwayCenterZ,
+                        ]}
+                        castShadow
+                        receiveShadow
+                    >
+                        <boxGeometry args={[WALL_T, ceilingHeight - dh, dw]} />
+                        <meshStandardMaterial color={theme.wallColor} roughness={0.75} />
+                    </mesh>
+                </>
+            ) : (
+                <mesh
+                    position={[ox + wHalf + WALL_T / 2, ceilingHeight / 2, oz]}
+                    castShadow
+                    receiveShadow
+                >
+                    <boxGeometry args={[WALL_T, ceilingHeight, depth]} />
+                    <meshStandardMaterial color={theme.wallColor} roughness={0.75} />
+                </mesh>
+            )}
 
             {/* Front wall (minZ = entry from previous hallway) */}
             {hasPrev ? (
@@ -206,8 +310,10 @@ export default function Room({ spec, hasNext, hasPrev, behind = false }: Props) 
                 </mesh>
             )}
 
-            {/* Back wall (maxZ = exit to next hallway) */}
-            {hasNext ? (
+            {/* Back wall (maxZ). Solid when the exit is a side doorway
+                (left/right) or when this is the final room; otherwise
+                cut a central doorway for a straight/forward exit. */}
+            {hasNext && exitSide === 'forward' ? (
                 <>
                     <mesh
                         position={[ox - (dw / 2 + sideW / 2), ceilingHeight / 2, oz + dHalf + WALL_T / 2]}
