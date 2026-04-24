@@ -23,9 +23,10 @@ type Props = { spec: RoomSpec };
  *     (e.g. if the room leaves + re-enters the render window) or future
  *     Mars-like rooms reuse the same pixels with zero additional cost.
  *
- * Mesh detail is also trimmed: 64x48 segments on the globe and detail-2
- * icosahedra for the moons still read as round under the bump lighting
- * without over-triangulating a small centerpiece.
+ * Albedo-only (no separate bump pass): one canvas, half the CPU work, and
+ * roughness + the painted macro detail still sell the surface. Mesh counts
+ * stay low (48x32 globe, detail-1 moons) so the room matches lightweight
+ * set-pieces like the fractal hall for steady FPS.
  */
 
 const TAU = Math.PI * 2;
@@ -98,22 +99,17 @@ const MARS_LANDMARKS: Array<{ u: number; v: number; r: number; darkness: number 
  */
 async function paintMarsAsync(
     size: number,
-    chunkRows = 24,
-): Promise<{ albedo: HTMLCanvasElement; bump: HTMLCanvasElement }> {
+    chunkRows = 32,
+): Promise<{ albedo: HTMLCanvasElement }> {
     const W = size;
     const H = size / 2;
     const albedo = document.createElement('canvas');
     albedo.width = W;
     albedo.height = H;
-    const bump = document.createElement('canvas');
-    bump.width = W;
-    bump.height = H;
     const ca = albedo.getContext('2d');
-    const cb = bump.getContext('2d');
-    if (!ca || !cb) return { albedo, bump };
+    if (!ca) return { albedo };
 
     const imgA = ca.createImageData(W, H);
-    const imgB = cb.createImageData(W, H);
     const noiseA = makeNoise(0x5ad00d); // macro continents
     const noiseB = makeNoise(0xc0ffee); // mid detail / dust
     const noiseC = makeNoise(0x13de57); // crater speckle
@@ -197,29 +193,17 @@ async function paintMarsAsync(
                 imgA.data[i + 1] = g | 0;
                 imgA.data[i + 2] = b | 0;
                 imgA.data[i + 3] = 255;
-
-                let h = 0.45 + nMacro * 0.25 + nMid * 0.18 + (nFine - 0.5) * 0.15;
-                h -= darkMask * 0.2;
-                h = Math.max(0, Math.min(1, h));
-                const hh = (h * 255) | 0;
-                imgB.data[i] = hh;
-                imgB.data[i + 1] = hh;
-                imgB.data[i + 2] = hh;
-                imgB.data[i + 3] = 255;
             }
         }
         // Let the browser breathe between row-chunks.
         await yieldToBrowser();
     }
     ca.putImageData(imgA, 0, 0);
-    cb.putImageData(imgB, 0, 0);
-    return { albedo, bump };
+    return { albedo };
 }
 
-// Module-level cache. First Room 8 mount kicks off the paint; every mount
-// after that (including revisits across the app's lifetime) reuses the
-// exact same textures.
-type MarsTextures = { aTex: THREE.CanvasTexture; bTex: THREE.CanvasTexture };
+// Module-level cache. First Room 8 mount kicks off the paint; revisits are free.
+type MarsTextures = { aTex: THREE.CanvasTexture };
 let marsTexturesCache: MarsTextures | null = null;
 let marsTexturesPromise: Promise<MarsTextures> | null = null;
 
@@ -227,20 +211,15 @@ function getOrBuildMarsTextures(): Promise<MarsTextures> {
     if (marsTexturesCache) return Promise.resolve(marsTexturesCache);
     if (marsTexturesPromise) return marsTexturesPromise;
     if (typeof document === 'undefined') {
-        // SSR fallback; a mount on the client will replace this.
         return Promise.reject(new Error('SSR: no document'));
     }
-    marsTexturesPromise = paintMarsAsync(512).then(({ albedo, bump }) => {
+    marsTexturesPromise = paintMarsAsync(384).then(({ albedo }) => {
         const aTex = new THREE.CanvasTexture(albedo);
         aTex.colorSpace = THREE.SRGBColorSpace;
-        aTex.anisotropy = 8;
+        aTex.anisotropy = 4;
         aTex.wrapS = THREE.RepeatWrapping;
         aTex.wrapT = THREE.ClampToEdgeWrapping;
-        const bTex = new THREE.CanvasTexture(bump);
-        bTex.anisotropy = 8;
-        bTex.wrapS = THREE.RepeatWrapping;
-        bTex.wrapT = THREE.ClampToEdgeWrapping;
-        marsTexturesCache = { aTex, bTex };
+        marsTexturesCache = { aTex };
         return marsTexturesCache;
     });
     return marsTexturesPromise;
@@ -249,14 +228,14 @@ function getOrBuildMarsTextures(): Promise<MarsTextures> {
 // ---------------------------------------------------------------------------
 // Irregular moon geometry. IcosahedronGeometry displaced by value noise so
 // Phobos and Deimos both look like cratered potatoes rather than spheres.
-// Detail dropped from 3 -> 2 (still ~320 verts, plenty for a 0.1m body).
+// detail 1: ~42 verts — fine at arm's length.
 // ---------------------------------------------------------------------------
 
 function makeMoonGeometry(
     avgRadius: number,
     irregularity: number,
     seed: number,
-    detail = 2,
+    detail = 1,
 ): THREE.BufferGeometry {
     const geo = new THREE.IcosahedronGeometry(avgRadius, detail);
     const pos = geo.attributes.position;
@@ -292,8 +271,6 @@ function makeMoonGeometry(
 // ---------------------------------------------------------------------------
 
 export default function MarsArtifact({ spec }: Props) {
-    const accent = spec.theme.accentColor;
-
     // Kick off (or reuse) the texture paint. Until it's ready we show a
     // flat rust material so the room looks right immediately and walking
     // around isn't gated on a 500ms paint.
@@ -315,8 +292,8 @@ export default function MarsArtifact({ spec }: Props) {
         };
     }, [textures]);
 
-    const phobosGeom = useMemo(() => makeMoonGeometry(0.12, 0.35, 0xf0b05, 2), []);
-    const deimosGeom = useMemo(() => makeMoonGeometry(0.075, 0.28, 0xde1705, 2), []);
+    const phobosGeom = useMemo(() => makeMoonGeometry(0.12, 0.35, 0xf0b05, 1), []);
+    const deimosGeom = useMemo(() => makeMoonGeometry(0.075, 0.28, 0xde1705, 1), []);
 
     const marsRef = useRef<THREE.Mesh>(null);
     const phobosGroup = useRef<THREE.Group>(null);
@@ -371,54 +348,38 @@ export default function MarsArtifact({ spec }: Props) {
     const MARS_R = 1.45;
 
     return (
-        <group position={[0, MARS_Y, 0]} rotation={[0, 0, MARS_AXIAL_TILT]}>
-            {/* Mars globe. 64x48 segments is still smooth under bump lighting. */}
+        <group key={`mars-artifact-${spec.index}`} position={[0, MARS_Y, 0]} rotation={[0, 0, MARS_AXIAL_TILT]}>
             <mesh ref={marsRef} castShadow receiveShadow>
-                <sphereGeometry args={[MARS_R, 64, 48]} />
+                <sphereGeometry args={[MARS_R, 48, 32]} />
                 {textures ? (
                     <meshStandardMaterial
                         map={textures.aTex}
-                        bumpMap={textures.bTex}
-                        bumpScale={0.06}
-                        roughness={0.92}
+                        roughness={0.9}
                         metalness={0.02}
                     />
                 ) : (
-                    <meshStandardMaterial color="#a5552d" roughness={0.92} metalness={0.02} />
+                    <meshStandardMaterial color="#a5552d" roughness={0.9} metalness={0.02} />
                 )}
             </mesh>
 
-            {/* Thin Martian atmosphere - dusty butterscotch halo */}
             <mesh ref={atmoRef}>
-                <sphereGeometry args={[MARS_R * 1.055, 32, 20]} />
+                <sphereGeometry args={[MARS_R * 1.06, 20, 14]} />
                 <meshBasicMaterial
                     color="#ffb488"
                     transparent
-                    opacity={0.13}
-                    side={THREE.BackSide}
-                    depthWrite={false}
-                />
-            </mesh>
-            {/* Outer rim glow */}
-            <mesh>
-                <sphereGeometry args={[MARS_R * 1.12, 24, 16]} />
-                <meshBasicMaterial
-                    color={accent}
-                    transparent
-                    opacity={0.05}
+                    opacity={0.12}
                     side={THREE.BackSide}
                     depthWrite={false}
                 />
             </mesh>
 
-            {/* Faint orbital guide rings. 96 radial segs is more than enough. */}
             <mesh rotation={[Math.PI / 2 + PHOBOS_INC, 0, 0]}>
-                <torusGeometry args={[PHOBOS_R, 0.004, 6, 96]} />
-                <meshBasicMaterial color="#ffb488" transparent opacity={0.18} />
+                <torusGeometry args={[PHOBOS_R, 0.004, 5, 48]} />
+                <meshBasicMaterial color="#ffb488" transparent opacity={0.16} />
             </mesh>
             <mesh rotation={[Math.PI / 2 + DEIMOS_INC, 0, 0]}>
-                <torusGeometry args={[DEIMOS_R, 0.003, 6, 96]} />
-                <meshBasicMaterial color="#e8d4b4" transparent opacity={0.14} />
+                <torusGeometry args={[DEIMOS_R, 0.003, 5, 48]} />
+                <meshBasicMaterial color="#e8d4b4" transparent opacity={0.12} />
             </mesh>
 
             {/* Phobos - close, fast, slightly redder */}
